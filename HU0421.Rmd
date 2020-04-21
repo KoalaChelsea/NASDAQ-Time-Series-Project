@@ -1,0 +1,78 @@
+---
+title: "Untitled"
+author: "Jiaqi Hu"
+date: "April 20, 2020"
+output: html_document
+---
+
+```{r}
+library(quantmod)
+# Pull data from Yahoo finance 
+SP500 = getSymbols('^GSPC', from='2010-01-01', to='2019-12-31', auto.assign = FALSE)
+SP500 = na.omit(SP500)
+# Select the relevant close price series
+SP500_close = SP500[,4]
+```
+
+```{r}
+NASDAQ_Composite = getSymbols('^IXIC', from='2010-01-01', to='2019-12-31', auto.assign = FALSE)
+NASDAQ_Composite = na.omit(NASDAQ_Composite)
+# Select the relevant close price series
+NASDAQ_Composite_close = NASDAQ_Composite[,4]
+```
+
+```{r}
+NASDAQ_100 = getSymbols('^NDX', from='2010-01-01', to='2019-12-31', auto.assign = FALSE)
+NASDAQ_100 = na.omit(NASDAQ_100)
+# Select the relevant close price series
+NASDAQ_100_close = NASDAQ_100[,4]
+```
+
+```{r}
+
+```
+
+```{r}
+plot(NASDAQ_Composite_close)
+plot(diff(NASDAQ_Composite_close))
+par(col.main='white')
+plot(decompose(ts(NASDAQ_Composite_close,frequency = 252)))
+par(col.main='black')
+title('Decomposition of NASDAQ_Composite_close')
+```
+
+```{r}
+library(ggplot2)
+df = data.frame(I=1:2515,date=index(NASDAQ_Composite_close), coredata(NASDAQ_Composite_close))
+
+df2 = data.frame(I=1:2515,date=index(NASDAQ_Composite_close), coredata(diff(NASDAQ_Composite_close)))
+
+ggplot(data = df, aes(x = I, y = IXIC.Close))+
+  geom_line(color = "#00AFBB", size = 1.5)+
+  labs( x = "Date", y = "Price", title ="NASDAQ_Composite_close")+
+  scale_x_continuous(breaks=seq(1,2515,251), 
+                    labels=c('2010','2011','2012','2013','2014','2015','2016','2017','2018','2019','2020'))
+
+ggplot(data = df2, aes(x = I, y = IXIC.Close))+
+  geom_line(color = "#00AFBB", size = 1)+
+  labs( x = "Date", y = "Diff Price", title ="Diff of NASDAQ_Composite_close")+
+  scale_x_continuous(breaks=seq(1,2515,251), 
+                    labels=c('2010','2011','2012','2013','2014','2015','2016','2017','2018','2019','2020'))
+```
+
+```{r}
+nasdaq = read.csv('C:/Users/hujia/Desktop/NASDAQ.csv')
+bam<- as.ts(nasdaq$BAM,start=c(2010,1,3),end=c(2010,12,31),frequency=251)
+plot(bam,xaxt = "n",main='ICE BofA US High Yield Index Option')
+axis(1, at=seq(1,2515,251), labels=2010:2020)
+
+plot.ts(diff(bam),xaxt = "n",main='Diff of ICE BofA US High Yield Index Option')
+axis(1, at=seq(1,2515,251), labels=2010:2020)
+
+par(col.main='white')
+plot(decompose(ts(bam,frequency = 251)))
+par(col.main='black')
+title('Decomposition of ICE BofA US High Yield Index Option')
+```
+
+
