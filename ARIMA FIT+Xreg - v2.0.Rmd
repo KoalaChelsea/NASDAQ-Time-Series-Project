@@ -1,0 +1,280 @@
+---
+title: "R Notebook"
+---
+```{r}
+library(astsa)
+library(forecast)
+library(fpp)
+```
+
+First we import our data -- NASDAQ daily Close price from 2010 to 2018.
+```{r}
+## Data Prepare
+Nas_Int=data.frame(read.csv('NASDAQ.csv',header = TRUE))
+Nas =ts(Nas_Int[,3][1:2264])
+```
+
+Let's see the movement of our data.
+```{r}
+plot(Nas, xlab='Time', ylab = 'NASDAQ')
+```
+
+Apparently, the NASDAQ daily close price has an ascending trend.
+
+
+
+
+# Methods
+
+## Arima: Autoregresive Integrating Moving Average
+
+The fact of introducing ARIMA models comes from the assumption that we are not working with a non stationary dataset series. We say that time series datasets are stationary when their means, variance and autocovariance do not change during time. The mayority of economic time series are not stationary, but differencing them determined number times makes them stationary. With this previous operation we can apply ARIMA models to any stock price.
+
+The construction of the models is made by iterative approaches using 4 steps:
+
+-Identification: With the time dataset we try to incorporate a relevant research model. The objective is to find the best values reproducting the time set variable to forecast.
+
+-Analysis and Differentiation: This step consists on studying the time set. In this study we incorporate different statistical tools like ACF and PACF tests, selecting the model parameters.
+
+-Improving ARIMA model: We extract the determination coeficients and adjust the model, adding regressors to the model.
+
+-Prediction: Once we have selected the best models, we can make a forecasting based on probabilistic future values.
+
+First we conduct an ADF test for the close price set:
+```{r}
+print(adf.test(Nas))
+```
+
+The result of ADF test shows that our data is non-stationary, which is within our expectation.
+
+After the ADF test we apply the ACF and PACF functions to the dataset.
+Since our data has an ascending trend, we also apply the ACF and PACF function on differenced data.
+
+```{r}
+par(mfcol=c(3,2))
+plot(Nas, xlab='Time', ylab = 'NASDAQ')
+acf(Nas, main ="ACF - NASDAQ", lag.max = 20)
+pacf(Nas, main ="PACF - NASDAQ", lag.max = 20)
+plot(diff(Nas), xlab='Time', ylab = 'NASDAQ.DIFF')
+acf(diff(Nas), main ="ACF - NASDAQ.DIFF", lag.max = 20)
+pacf(diff(Nas), main ="PACF - NASDAQ.DIFF", lag.max = 20)
+```
+
+
+So firstly we would like to check the seasonality of the series to see which model might be better, ARIMA or SARIMA. From the decompostion graph stated before, we can see there is no significnat seasonality for this sereis, so an ARIMA model is better in this case. And in the next step, we will use ACF and PACF plots to explore the best ARIMA model.
+
+1. AR term
+
+```{r}
+# PACF plot of 1st differenced series
+pacf(diff(Nas))
+```
+
+
+It seems there is no cutoff for the PACF, the the AR term may equals to 0,1 or 2.
+
+2.MA term
+
+```{r}
+#autocorrelation plot of the differenced series
+acf(diff(Nas))
+```
+
+It seems there is a sharp cut off after lag=0, so the MA term may equals to 0, 1 or 2
+
+Now we fit different ARIMA models to check the combination of the possible AR and MA term, using AIC and BIC to pick the most proper one.
+
+```{r}
+fit1 <-Arima(Nas, order=c(0, 1, 0),include.drift = TRUE)
+fit2 <-Arima(Nas, order=c(1, 1, 1),include.drift = TRUE)
+fit3 <-Arima(Nas, order=c(1, 1, 2),include.drift = TRUE)
+fit4 <-Arima(Nas, order=c(2, 1, 0),include.drift = TRUE)
+fit5 <-Arima(Nas, order=c(2, 1, 1),include.drift = TRUE)
+fit6 <-Arima(Nas, order=c(2, 1, 2),include.drift = TRUE)
+summary(fit1)
+summary(fit2)
+summary(fit3)
+summary(fit4)
+summary(fit5)
+summary(fit6)
+```
+
+
+Then we use AIC and BIC to do comparision
+```{r}
+a1=AIC(fit1)
+b1=BIC(fit1)
+cat("The AIC for fit1 is",a1,"; The BIC for fit1 is",b1,"\n")
+
+a2=AIC(fit2)
+b2=BIC(fit2)
+cat("The AIC for fit2 is",a2,"; The BIC for fit2 is",b2,"\n")
+
+
+a3=AIC(fit3)
+b3=BIC(fit3)
+cat("The AIC for fit3 is",a3,"; The BIC for fit3 is",b1,"\n")
+
+
+a4=AIC(fit4)
+b4=BIC(fit4)
+cat("The AIC for fit4 is",a4,"; The BIC for fit4 is",b4,"\n")
+
+
+a5=AIC(fit5)
+b5=BIC(fit5)
+cat("The AIC for fit5 is",a5,"; The BIC for fit5 is",b5,"\n")
+
+
+a6=AIC(fit6)
+b6=BIC(fit6)
+cat("The AIC for fit6 is",a6,"; The BIC for fit6 is",b6,"\n")
+
+```
+
+It seems the ARIMA(2,1,2) has the lowest AIC while the ARIMA(0,1,0) has the lowest BIC. So we will apply the siginicicance of coeff of these two models to help select the most proper one.
+
+```{r}
+#significance of coeff of fit1
+(1-pnorm(abs(fit1$coef)/sqrt(diag(fit1$var.coef))))*2
+```
+
+The p-value for drift is greater than the common alpha level of 0.05, which indicated that it is not statistically significant.
+
+
+```{r}
+#significance of coeff of fit6
+(1-pnorm(abs(fit6$coef)/sqrt(diag(fit6$var.coef))))*2
+```
+
+Using the same rules, we can see the coeff of most terms of fit6 (ARIMA(2,1,2)) are significant. So though ARIMA (0,1,0) has the lowest BIC value, its coefficients is not statistally signicicant at all, and we finally decide to select ARIMA(2,1,2) to fit the series in this case.
+
+Then we use auto.arima function to seek the best model and to check whether it is consistent with the model we selected above (ARIMA(2,1,2)).
+
+We can see our model factors as below.
+```{r}
+## AUTO.ARIMA
+ARIMA.Auto=auto.arima(Nas)
+summary(ARIMA.Auto)
+```
+
+The result ARIMA model is ARIMA(2,1,2).
+
+
+
+```{r}
+# Residuals of ARIMA.Auto
+par(mfrow = c(2,1))
+res.auto = residuals(ARIMA.Auto)
+plot(res.auto, main = 'Residuals of ARIMA.Auto')
+acf(res.auto, main = 'ACF - Residuals of ARIMA.Auto')
+```
+
+As we can see from the graph, the residuals is almost a white noise. 
+
+Let's see the Ljung-Box p-values of the model. For the Ljung-Box test we have
+-H0: our model does not show lack of fit (or in simpleterms—the model is just fine)
+
+-HA: the model does show a lack of fit. In other words, the residuals from the time series model resemble white noise.
+
+Thus a good forecasting model need to have zero correlation between its residuals or else we could not forecast them. And a significant p-value in this test rejects the null hypothesis that the time series isn’t autocorrelated. 
+
+```{r}
+Box.test(res.auto, type = c("Box-Pierce","Ljung-Box"))
+```
+
+In this test we can see that the p-value is far from 0.05 so that the residuals are independent which we want for the model to be corrected and improved, that's why we invite the regressor in our next steps.
+
+Based on a purpose of further improve our model, we consider adding on a regressor -- INTEREST RATE, which is closely related to stock price.
+
+```{r}
+## Add a regressor -- interest rate
+Int = ts(Nas_Int[,4][1:2264])
+par(mfrow = c(2,1))
+plot(diff(Nas), xlab='Time', ylab = 'NASDAQ.DIFF')
+plot(Int, xlab='Time', ylab = 'Interest Rate')
+```
+
+From the plots above, we can see that the difference of NASDAQ index and the interest rate almost fluctuate at the same time.
+
+Again, we use auto.arima function to gives us the better approach to the dataset, so we will not deep the analysis on finding model parameters here.
+```{r}
+ARIMA.Xreg=auto.arima(Nas,stepwise = FALSE, approx = FALSE, xreg = Int, seasonal=TRUE)
+summary(ARIMA.Xreg)
+```
+
+The result model is ARIMA(4,1,1).
+
+
+```{r}
+# Residuals of ARIMA.Auto
+par(mfrow = c(2,1))
+res.xreg = residuals(ARIMA.Xreg)
+plot(res.xreg, main = 'Residuals of ARIMA.Xreg')
+acf(res.xreg, main = 'ACF - Residuals of ARIMA.Xreg')
+```
+
+As we can see from the graph, the residuals is almost a white noise. 
+
+We also do the Ljung-Box p-values of the model with regressor.
+```{r}
+Box.test(res.xreg, type = c("Box-Pierce","Ljung-Box"))
+```
+
+The p-value is far from 0 so that our null hypothesis is again not rejected, allowing us to continue our study with a solid motivation.
+
+Which one is better, with or without regressor? We compare the AIC and BIC of two models.
+
+```{r}
+## AIC & BIC
+a.auto = AIC(ARIMA.Auto)
+a.xreg = AIC(ARIMA.Xreg)
+b.auto = BIC(ARIMA.Auto)
+b.xreg = BIC(ARIMA.Xreg)
+cat("The AIC for ARIMA.Auto is",a.auto,"; The BIC for ARIMA.Auto is",b.auto,"\n")
+cat("The AIC for ARIMA.Xreg is",a.xreg,"; The BIC for ARIMA.Xreg is",b.xreg,"\n")
+```
+
+The ARIMA.Xreg model has both smaller AIC and BIC. So adding a regressor benefits the performance of our model.
+
+
+Having our ARIMA models applied and analysed we can plot the model prediction in a red line over the real train set stock close price in blue.
+
+```{r}
+## Training data fitting 
+par(mfrow = c(2,1))
+plot(Nas[1:2264],col="blue", lwd = 1.5,type = 'l', xlab = 'Time', ylab = 'NASDAQ', main = "Fitted ARIMA.Auto")
+lines(fitted(ARIMA.Auto),col="red",lwd = 0.5,type = 'l')
+plot(Nas[1:2264],col="blue", lwd = 1.5,type = 'l', xlab = 'Time', ylab = 'NASDAQ', main = "Fitted ARIMA.Xreg")
+lines(fitted(ARIMA.Xreg),col="red",lwd = 0.5,type = 'l')
+```
+
+Both plots indicate that our models fit the actual data quite well. We need to remind that these are auto regressive models, so we are going to have very good past predictions. Now with the model fitted we can proceed to forecast our daily close price values to the future. We focus on forecasting the close Nasdaq index for the next year, 2019.
+
+
+As we can see, we have a blue line that represents the mean of our prediction, a red line that represents the actual data in 2019. With the blue line explained we can see a darker and light darker areas, representing 80% and 95% confidence intervals respectively in lower and upper scenarios.
+```{r}
+## Forcasting
+par(mfrow = c(2,1))
+pred = forecast(ARIMA.Auto,h = 251)
+plot(pred)
+lines(c(2265:2515),Nas_Int[,3][2265:2515], col = 2)
+pred = forecast(ARIMA.Xreg,h = 251, xreg = as.numeric(rep(FALSE,251)))
+plot(pred)
+lines(c(2265:2515),Nas_Int[,3][2265:2515], col = 2)
+```
+
+As we can see, both models indicate an upward trend. There is a downward trend at the end of the training data. The first model is affected by this and gives a lower prediction in 2019. While our second model overcomes this misleading information and gives a relevantly accurate prediction, much better than the first one.
+
+
+We try to explain why the ARIMA model with a regressor can make better predictions.
+```{r}
+Int = ts(Nas_Int[,4][1:2264])
+par(mfrow = c(2,1))
+plot(Nas, xlab='Time', ylab = 'NASDAQ.DIFF')
+plot(Int, xlab='Time', ylab = 'Interest Rate')
+```
+
+When Nasdaq index descended in late 2018, the interest rate get on an upward trend. We can assume that this wave of stock descending came from the increase of interest rate. As the interest rate would be adjusted in the near future --it's impossible to increase all the time -- the stock price would quickly get back to its way in increasing.
+
+
