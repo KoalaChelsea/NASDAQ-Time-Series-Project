@@ -1,0 +1,80 @@
+---
+title: "Stock_Price_Prediction_EDA"
+output: html_document
+---
+
+First we import our data -- NASDAQ daily Close price from 2010 to 2018.
+```{r}
+## Data Prepare
+Nas_Int = read.csv('NASDAQ.csv', header = TRUE, row.names=1)
+str(Nas_Int)
+```
+
+```{r}
+library(ggplot2)
+Nas_Int$date = as.Date(Nas_Int$date, "%m/%d/%Y")
+ggplot(data = Nas_Int, aes(date,IXIC.Close)) + 
+  ggtitle("NASDAQ Composite stock price from Jan 2010 to Dec 2019") + 
+  geom_line(col='turquoise4', size = 1) + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") + 
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        axis.line.x = element_line(colour="gray"),
+        axis.line.y = element_line(colour="gray")) +
+        labs(x = "Year", y = "Close Price") 
+```
+
+```{r}
+ggplot(data = Nas_Int, aes(date,BAM)) + 
+  ggtitle("Interest Rates from Jan 2010 to Dec 2019") + 
+  geom_line(col='turquoise4', size = 1) + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        axis.line.x = element_line(colour="gray"),
+        axis.line.y = element_line(colour="gray")) +
+        labs(x = "Year", y = "Index") 
+```
+
+```{r}
+library(xts)
+library(dygraphs)
+# Then you can create the xts necessary to use dygraph
+don <- xts(x = Nas_Int$IXIC.Close, order.by = Nas_Int$date)
+
+# Finally the plot
+dygraph(don, main = "NASDAQ Composite stock price from Jan 2010 to Dec 2019") 
+```
+
+```{r}
+library(lubridate)
+library(dplyr)
+Yr = Nas_Int %>% 
+  group_by(yr = year(date)) %>% 
+  summarise(close = mean(IXIC.Close))
+
+ggplot(Yr, aes(x = factor(yr), y = close)) + 
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = round(close)), vjust = -0.3) +
+  ggtitle("Yearly Mean stock price from 2010 to 2019") 
+```
+
+```{r}
+Mon = Nas_Int %>% 
+  group_by(mon = month(date)) %>% 
+  summarise(close = mean(IXIC.Close))
+
+ggplot(Mon, aes(x = factor(mon), y = close)) + 
+  geom_bar(fill = "#0073C2FF", stat = "identity") +
+  geom_text(aes(label = round(close)), vjust = -0.3) +
+  ggtitle("Monthly Mean stock price from 2010 to 2019") 
+```
+
+```{r}
+ts_object = ts(Nas_Int$IXIC.Close, frequency = 250)
+plot(stl(ts_object, s.window = "periodic"),
+         main = "Decomposition plot of close price from Jan 2010 to Dec 2019",
+         col = "turquoise4")
+```
+
+
