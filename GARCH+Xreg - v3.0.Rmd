@@ -5,7 +5,10 @@ title: "R Notebook"
 library(astsa)
 library(forecast)
 library(fpp)
-library(fGarch) 
+library(fGarch)
+# install.packages(c("rugarch", "mclust", "quantmod"))
+library(rugarch)
+library(quantmod)
 ```
 
 First we import our data -- NASDAQ daily Close price from 2010 to 2018.
@@ -255,13 +258,13 @@ Both plots indicate that our models fit the actual data quite well. We need to r
 
 As we can see, we have a blue line that represents the mean of our prediction, a red line that represents the actual data in 2019. With the blue line explained we can see a darker and light darker areas, representing 80% and 95% confidence intervals respectively in lower and upper scenarios.
 ```{r}
-## Forcasting
+## Forecasting
 par(mfrow = c(2,1))
 pred = forecast(ARIMA.Auto,h = 251)
 plot(pred)
 lines(c(2265:2515),Nas_Int[,3][2265:2515], col = 2)
-pred = forecast(ARIMA.Xreg,h = 251, xreg = as.numeric(rep(FALSE,251)))
-plot(pred)
+pred2 = forecast(ARIMA.Xreg,h = 251, xreg = as.numeric(rep(FALSE,251)))
+plot(pred2)
 lines(c(2265:2515),Nas_Int[,3][2265:2515], col = 2)
 ```
 
@@ -284,34 +287,84 @@ When Nasdaq index descended in late 2018, the interest rate get on an upward tre
 Since we have already fit ARIMA model to NASDAQ Composite data, let's see if GARCH model (with regressor) can further improve the forecast:
 
 ```{r}
-Nas2 <- diff(Nas)
-ARMA <- auto.arima(Nas2) # ARMA(2,2)
-acf2(residuals(ARMA)^2)
+Nas2 <- Nas_Int[,3][1:2515]
+Nas.diff <- diff(Nas_Int[,3][1:2515])
+Nas.train <- Nas_Int[,3][1:2264] 
+Nas.test <- Nas_Int[,3][2265:2515]
+Nas.train.diff <- diff(Nas.train)
+Nas.test.diff <- diff(Nas.test)
+Garch.Arma <- sarima(Nas.train.diff, 2,0,2)
+Garch.Arma
 ```
-Try garch(1,2): The highest spikes are acf: 1 and pacf: 1 or 2
+
+Then lets see if adding garch model can help improve the model:
+
+First let's check the acf of squared residuals: 
+
 ```{r}
-garch <- garchFit(~arma(2,2)+garch(1,1), Nas2)
-summary(garch)
-# predict(garch, n.ahead = 251)
-# plot(pred2)
+acf2(resid(Garch.Arma$fit)^2)
+```
+
+From the above plots, we see that the squared residuals die down while number of lag grows, and the spikes are in first few lags. Therefore, let's try arma(2,2) + garch(p,q), where p = 1 to 2 and j = 0 to 2. 
+```{r}
+garch1.0 <- garchFit(~arma(2,2)+garch(1,0), Nas.train.diff)
+garch1.1 <- garchFit(~arma(2,2)+garch(1,1), Nas.train.diff)
+garch1.2 <- garchFit(~arma(2,2)+garch(1,2), Nas.train.diff)
+garch2.0 <- garchFit(~arma(2,2)+garch(2,0), Nas.train.diff)
+garch2.1 <- garchFit(~arma(2,2)+garch(2,1), Nas.train.diff)
+garch2.2 <- garchFit(~arma(2,2)+garch(2,2), Nas.train.diff)
+```
+
+and then compare the AIC and BIC values of the models, we find arma(2,2)+garch(1,1) has the smallest AIC and BIC values.
+```{r}
+garch1.0@fit$ics
+garch1.1@fit$ics
+garch1.2@fit$ics
+garch2.0@fit$ics
+garch2.1@fit$ics
+garch2.2@fit$ics
+```
+
+Let's plot the lines from our three predictions, where black line is the real data, blue line is ARIMA(2,1,2) model's forecast, orange line is ARIMA+Xreg(4,1,1) model's forecast, and the red line is ARIMA(2,1,2)+GARCH(1,1) model's forecast.
+
+It is obvious that ARIMA model's forecast is a straight line with or withour drift, while by adding the GARCH model, it takes votality into account and gives us slightly curved line in this case.
+```{r}
+Garch.pred <- suppressWarnings(predict(garch1.1, n.ahead=251))
+tmp <- as.list(Garch.pred["meanForecast"])$meanForecast
+plot(1:2263, Nas.train.diff, type="l")
+lines(1:2263, garch1.1@fitted, col=2)
+tmp2 <- rep(0, 251)
+tmp2[1] = Nas2[2264] + tmp[1]
+for(i in 2:251){
+  tmp2[i] = tmp2[i - 1] + tmp[i]
+}
+pred$mean
+plot(2265:2515, Nas.test, type="l", ylab="Nasdaq Composite Index", xlab="Time", main="ARIMA(2,1,2), ARIMA+Xreg(4,1,1), and ARIMA(2,1,2)+GARCH(1,1)")
+lines(2265:2515, tmp2, col=2)
+lines(2265:2515, pred$mean, col=4)
+lines(2265:2515, pred2$mean, col="orange")
 ```
 
 ```{r}
-# install.packages("rugarch")
-library(rugarch)
-spec = ugarchspec(mean.model = list(armaOrder = c(2, 2),include.mean = FALSE), variance.model = list(model = 'sGARCH', garchOrder = c(1, 1)), distribution = 'norm')
 
+```
+
+```{r}
+spec = ugarchspec(mean.model = list(armaOrder = c(2, 2), include.mean = FALSE), variance.model = list(model = 'sGARCH', garchOrder = c(1, 1)), distribution = 'norm')
 spec2 = ugarchspec(mean.model = list(armaOrder = c(2, 2),include.mean = FALSE), variance.model = list(model = 'sGARCH', garchOrder = c(1, 1),external.regressors=as.matrix(Int)), distribution = 'norm')
-GARCH.Auto = ugarchfit(data = Nas2, spec = spec)
+GARCH.Auto = ugarchfit(data = Nas.diff, spec = spec)
 GARCH.Auto
-GARCH.Xreg = ugarchfit(data = Nas2, spec = spec2)
+GARCH.Xreg = ugarchfit(data = Nas.diff, spec = spec2)
 GARCH.Xreg
 ```
-
 ```{r}
-pred2 <- ugarchforecast(GARCH.Auto,n.ahead=251, data = Nas2[1:2644, ,drop=FALSE])
+length(GARCH.Xreg@fit$residuals)
+```
+```{r}
+pred2 <- ugarchforecast(GARCH.Auto,n.roll=251)
 #plot(pred2)
 pred2
+plot(pred2@forecast$seriesFor, type = "l")
 #d <- as.data.frame(attributes(pred2)[[1]])[5]
 #plot(d)
 # lines(c(2265:2515),Nas_Int[,3][2265:2515], col = 2)
