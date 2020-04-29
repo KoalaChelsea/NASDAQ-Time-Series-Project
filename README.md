@@ -1,4 +1,4 @@
-## Appendex
+## Appendix
 
 ### NASDAQ.csv:
 This is the data file we used for this project. 
