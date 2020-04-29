@@ -1,9 +1,13 @@
 ## Appendix
 
 ### NASDAQ.csv:
+
 This is the data file we used for this project. 
+
 Data Source:
+
 NASDAQ Composite Index: https://sg.finance.yahoo.com/quote/%5EIXIC?p=^IXIC&.tsrc=fin-srch
+
 Interest Rate: https://fred.stlouisfed.org/series/BAMLH0A0HYM2
 
 ### NASDAQ_R_Final.html: 
