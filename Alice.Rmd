@@ -1,0 +1,57 @@
+---
+title: "Alice3"
+author: "Xinyue (Ivy) Liu"
+date: "11/21/2021"
+output: html_document
+---
+
+```{r}
+# 考拉斯猜想 collatz conjecture
+```
+
+```{r}
+length_list = rep(0, 10000)
+for(i in 1:10000){
+  # for each i, do the while loop and record the length
+  n = i
+  length_counter = 1
+  while(n != 1){
+    if(n %% 2 == 0){
+      n = n / 2
+      length_counter = length_counter + 1
+    }else{
+      n = n * 3 + 1
+      length_counter = length_counter + 1
+    } 
+  }
+  length_list[i] = length_counter
+}
+```
+
+```{r}
+# length_list
+hist(length_list)
+summary(length_list)
+sd(length_list)
+```
+
+```{r}
+frequency_list = rep(1, 100)
+for(n in 1:10000){
+  # for each i, do the while loop and record the length
+  while(n != 1){
+    if(n %% 2 == 0){
+      n = n / 2
+    }else{
+      n = n * 3 + 1
+    } 
+    if(n <= 100){
+      frequency_list[n] = frequency_list[n] + 1
+    }
+  }
+}
+```
+
+```{r}
+frequency_list
+```
